@@ -1,0 +1,170 @@
+apiVersion: v1
+# KIND: Pod é a unidade básica de deployment no Kubernetes
+# Um Pod pode conter um ou mais containers que compartilham rede e storage
+kind: Pod
+metadata:
+  # NAME: Identificador único do Pod dentro do namespace
+  # Deve ser DNS-compatible: minúsculas, hífens, números, máximo 253 caracteres
+  name: giropops-strigus-desafio2
+  # NAMESPACE: Espaço isolado para agrupar recursos relacionados
+  # 'default' é usado quando nenhum namespace específico é definido
+  namespace: default
+  # LABELS: Metadados para identificar e selecionar recursos
+  # Usados por Services, Selectors e outras ferramentas Kubernetes
+  labels:
+    app: nginx                 # Aplicação principal - servidor web Nginx
+    version: "2.0"             # Versão desta configuração específica
+    environment: development   # Ambiente de desenvolvimento/testes
+    team: devops               # Equipe responsável pela operação
+  # ANNOTATIONS: Metadados descritivos para documentação e ferramentas
+  # Não são usados para seleção de objetos, apenas para informação
+  annotations:
+    description: "Pod com Nginx e Alpine - Corrigido erro 403 com conteúdo estático"
+    created-by: "devgs8"
+    issue-resolved: "403 Forbidden - Adicionado index.html e ajustado volume sharing"
+    documentation: "https://kubernetes.io/docs/concepts/workloads/pods/"
+
+spec:
+  # RESTART POLICY: Comportamento do Kubernetes quando containers terminam
+  # - Always: Reinicia automaticamente (padrão para serviços web)
+  # - OnFailure: Reinicia apenas em caso de falha
+  # - Never: Nunca reinicia
+  restartPolicy: Always
+
+  # CONTAINERS: Lista de containers executando no mesmo Pod
+  # Containers no mesmo Pod compartilham:
+  # - Namespace de rede (mesmo IP, comunicação via localhost)
+  # - Volumes de armazenamento
+  # - Ciclo de vida (iniciam e param juntos)
+  containers:
+  # CONTAINER 1: Servidor Web Nginx
+  - name: nginx-container      # Nome único para referência dentro do Pod
+    image: nginx:latest        # Imagem Docker oficial do Nginx
+    # IMAGE PULL POLICY: Controla quando baixar a imagem do registry
+    # - IfNotPresent: Baixa apenas se não existir localmente (otimiza deployments)
+    # - Always: Sempre baixa a imagem (garante versão mais recente)
+    # - Never: Usa apenas imagem local (para ambientes offline)
+    imagePullPolicy: IfNotPresent
+    
+    # PORTS: Portas que o container expõe (informativo para Services)
+    ports:
+    - name: http               # Nome descritivo para referência em Services
+      containerPort: 80        # Porta TCP onde Nginx escuta requisições HTTP
+      protocol: TCP            # Protocolo de transporte (TCP para HTTP)
+
+    # RESOURCES: Requisições e limites de recursos computacionais
+    resources:
+      # REQUESTS: Recursos mínimos reservados - Kubernetes usa para scheduling
+      requests:
+        cpu: "100m"            # 100 milicores = 0.1 vCPU (mínimo para operação)
+        memory: "64Mi"         # 64 Mebibytes de RAM (1 Mi = 1024^2 bytes)
+      # LIMITS: Máximo de recursos que o container pode consumir
+      limits:
+        cpu: "500m"            # 500 milicores = 0.5 vCPU (previne uso excessivo)
+        memory: "256Mi"        # 256 Mebibytes de RAM
+
+    # LIVENESS PROBE: Verifica se a aplicação está viva e responsiva
+    # Se falhar, Kubernetes reinicia o container após failureThreshold
+    livenessProbe:
+      httpGet:                 # Faz requisição HTTP GET para verificar saúde
+        path: /index.html      # CORREÇÃO: Verifica arquivo específico em vez de diretório
+        port: 80
+      initialDelaySeconds: 15  # Aguarda 15s após start antes da primeira verificação
+      periodSeconds: 20        # Executa verificação a cada 20 segundos
+      timeoutSeconds: 5        # Timeout de 5 segundos para a requisição
+      successThreshold: 1      # 1 verificação bem-sucedida marca como saudável
+      failureThreshold: 3      # 3 falhas consecutivas marca como não saudável
+
+    # READINESS PROBE: Verifica se a aplicação está pronta para receber tráfego
+    # Se falhar, o Pod é removido dos Service Endpoints
+    readinessProbe:
+      httpGet:
+        path: /index.html      # CORREÇÃO: Verifica arquivo específico
+        port: 80
+      initialDelaySeconds: 5   # Verifica rápido se está pronto (5 segundos)
+      periodSeconds: 10        # Verifica a cada 10 segundos
+      timeoutSeconds: 3        # Timeout menor para readiness (3 segundos)
+
+    # VOLUME MOUNTS: Pontos onde volumes são montados no filesystem do container
+    volumeMounts:
+    - name: shared-data        # Referência ao volume definido na seção volumes:
+      mountPath: /usr/share/nginx/html  # Diretório onde Nginx serve arquivos estáticos
+      readOnly: false          # Container pode ler e escrever neste volume
+
+  # CONTAINER 2: Alpine Linux - Container utilitário
+  - name: alpine-container     # Nome único para o segundo container
+    image: alpine:latest       # Imagem Alpine Linux (minimalista, ~5MB)
+    imagePullPolicy: IfNotPresent
+    
+    # COMMAND E ARGS: Substitui o comando padrão da imagem
+    command: ["/bin/sh"]       # Executa shell script
+    args:                      # Argumentos passados para o shell
+    - "-c"
+    # CORREÇÃO: Script expandido para criar index.html E escrever logs
+    - |
+      mkdir -p /shared-data
+      # Criar arquivo index.html para Nginx servir
+      cat > /shared-data/index.html << 'EOF'
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <title>Giropops Strigus - Desafio Day 2</title>
+          <style>
+              body { font-family: Arial, sans-serif; margin: 40px; background: #f0f0f0; }
+              .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+              h1 { color: #333; }
+              .info { background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <h1>🚀 Giropops Strigus - Kubernetes Day 2</h1>
+              <div class="info">
+                  <p><strong>Pod:</strong> giropops-strigus-desafio2-corrigido</p>
+                  <p><strong>Containers:</strong> Nginx + Alpine</p>
+                  <p><strong>Volume:</strong> EmptyDir compartilhado</p>
+                  <p><strong>Status:</strong> ✅ Funcionando perfeitamente!</p>
+              </div>
+              <p>Esta página é servida pelo Nginx e o conteúdo é criado pelo container Alpine através de um volume EmptyDir compartilhado.</p>
+          </div>
+      </body>
+      </html>
+      EOF
+      # Escrever logs continuamente
+      while true; do echo "$(date): Container Alpine ativo - Volume compartilhado funcionando" >> /shared-data/log.txt; sleep 30; done
+
+    # RESOURCES: Requisições menores para container utilitário
+    resources:
+      requests:
+        cpu: "50m"             # 50 milicores - suficiente para tarefas leves
+        memory: "32Mi"         # 32 Mebibytes - Alpine é muito leve
+      limits:
+        cpu: "100m"            # 100 milicores - limite máximo
+        memory: "64Mi"         # 64 Mebibytes - limite de memória
+
+    # VOLUME MOUNTS: Monta o mesmo volume compartilhado com Nginx
+    volumeMounts:
+    - name: shared-data        # Mesmo volume do Nginx
+      mountPath: /shared-data  # Caminho diferente no Alpine
+      readOnly: false          # Permite escrita - Alpine cria arquivos aqui
+
+  # VOLUMES: Definição dos volumes disponíveis para montagem
+  volumes:
+  # VOLUME 1: EmptyDir - Volume temporário que dura enquanto o Pod existir
+  - name: shared-data          # Nome referenciado nos volumeMounts
+    emptyDir:                  # Tipo EmptyDir - diretório vazio criado quando Pod inicia
+      # Dados persistem durante a vida do Pod, mas são perdidos quando Pod é deletado
+      # Ideal para compartilhamento de dados entre containers no mesmo Pod
+      medium: ""               # "" = disco (padrão), "Memory" = RAM (mais rápido)
+      sizeLimit: 500Mi         # Limite opcional de tamanho (500 Mebibytes)
+
+  # CONFIGURAÇÕES DE REDE
+  hostNetwork: false           # Se true, usa rede do node host (não recomendado)
+  hostPID: false               # Se true, compartilha PID namespace com host
+  hostIPC: false               # Se true, compartilha IPC namespace com host
+
+  # CONFIGURAÇÃO DNS
+  dnsPolicy: ClusterFirst      # Política de resolução DNS
+  # - ClusterFirst: Encaminha DNS para cluster DNS antes de servidores externos
+  # - Default: Herda configuração DNS do node
+  # - None: Configuração personalizada via dnsConfig
