@@ -1,0 +1,35 @@
+apiVersion: v1                # Versão da API do Kubernetes utilizada para criar Pods
+kind: Pod                     # Tipo de recurso: Pod
+
+metadata:
+  name: stressapp-falha       # Nome do Pod
+  labels:                     # Conjunto de labels para identificação e filtros
+    app: stressapp            # Nome da aplicação
+    phase: treinamento-ch2     # Contexto / fase do exercício
+
+spec:
+  restartPolicy: Always       # O Kubernetes vai tentar reiniciar o Pod sempre que ele falhar
+
+  containers:
+    - name: stress            # Nome do container dentro do Pod
+      image: polinux/stress   # Imagem usada, contém o utilitário 'stress'
+
+      # ----- Recursos insuficientes de propósito -----
+      # Estes valores estão configurados abaixo do consumo real
+      # O stress vai tentar usar ~250MB, mas o limite é 200Mi
+      # Resultado esperado: OOMKilled (falta de memória)
+      resources:
+        limits:
+          cpu: "0.5"          # Limite máximo de CPU permitido ao container
+          memory: "200Mi"     # Limite máximo de memória (insuficiente de propósito)
+        requests:
+          cpu: "0.3"          # Valor mínimo de CPU necessário para agendamento
+          memory: "100Mi"     # Valor mínimo de memória para agendamento
+
+      # ----- Comando que força consumo de memória -----
+      # --vm 1 → cria um processo de alocação de memória
+      # --vm-bytes 250M → aloca 250MB de RAM (acima do limite)
+      # --vm-hang 1 → impede o processo de terminar imediatamente
+      command: ["stress"]
+      args: ["--vm", "1", "--vm-bytes", "250M", "--vm-hang", "1"]
+
