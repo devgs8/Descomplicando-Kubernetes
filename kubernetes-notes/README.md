@@ -98,4 +98,4 @@ kubectl logs <pod> -c <container>  # Logs de container específico
 
 
 
-*Documentação criada por devgs8 - $(date)*
+*Documentação criada por devgs8 - 01/12/2025*
